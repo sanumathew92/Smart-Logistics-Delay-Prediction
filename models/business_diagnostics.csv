@@ -1,0 +1,9 @@
+Metric,Value
+True Negatives,91.0
+False Positives,3.0
+False Negatives,9.0
+True Positives,97.0
+Total Shipments,200.0
+Delay Detection Rate,0.9150943396226415
+False Alert Rate,0.031914893617021274
+Missed Delay Rate,0.08490566037735849

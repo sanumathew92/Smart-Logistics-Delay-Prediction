@@ -1,0 +1,8 @@
+{
+    "champion_model": "Random Forest",
+    "threshold": 0.48,
+    "minimum_threshold": 0.7,
+    "target": "Logistics_Delay",
+    "transformed_features": 79,
+    "business_objective": "Prioritize early detection of potential logistics delays"
+}

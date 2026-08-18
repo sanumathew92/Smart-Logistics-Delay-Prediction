@@ -1,0 +1,9 @@
+{
+    "Champion Model": "Random Forest",
+    "Classification Threshold": 0.48,
+    "Precision": 0.7207,
+    "Recall": 0.7407,
+    "F1 Score": 0.7306,
+    "ROC_AUC": 0.7748,
+    "PR_AUC": 0.863
+}

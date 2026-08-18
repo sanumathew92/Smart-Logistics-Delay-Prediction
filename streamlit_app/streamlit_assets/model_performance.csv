@@ -1,0 +1,2 @@
+Model,Threshold,Minimum Precision,Accuracy,Precision,Recall,F1,ROC_AUC,PR_AUC
+Random Forest,0.48,0.7,0.705,0.7207,0.7407,0.7306,0.7748,0.863

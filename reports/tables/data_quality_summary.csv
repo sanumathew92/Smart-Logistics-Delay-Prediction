@@ -1,0 +1,17 @@
+,Missing,Unique,Datatype
+Timestamp,0,1000,str
+Asset_ID,0,10,str
+Latitude,0,1000,float64
+Longitude,0,1000,float64
+Inventory_Level,0,366,int64
+Shipment_Status,0,3,str
+Temperature,0,121,float64
+Humidity,0,291,float64
+Traffic_Status,0,3,str
+Waiting_Time,0,51,int64
+User_Transaction_Amount,0,365,int64
+User_Purchase_Frequency,0,10,int64
+Logistics_Delay_Reason,263,3,str
+Asset_Utilization,0,366,float64
+Demand_Forecast,0,200,int64
+Logistics_Delay,0,2,int64
