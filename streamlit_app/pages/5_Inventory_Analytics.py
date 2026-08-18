@@ -1,240 +1,436 @@
-# Inventory_Analytics.py 
-# Smart Logistics Delay Prediction & Decision Support System
+# ============================================================
+# IMPORT LIBRARIES
+# ============================================================
 
-import streamlit as st 
-import pandas as pd 
-import numpy as np 
-import plotly.express as px 
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
 
-# Page Configuration
+from pathlib import Path
+
+
+# ============================================================
+# PAGE CONFIGURATION
+# ============================================================
 
 st.set_page_config(
     page_title="Inventory Analytics",
-    page_icon = "📦",
+    page_icon="📦",
     layout="wide"
 )
 
-# Title
+
+# ============================================================
+# PROJECT PATH
+# ============================================================
+# Current file:
+#
+# Smart Logistic Dataset/
+# └── streamlit_app/
+#     └── pages/
+#         └── 5_Inventory_Analytics.py
+#
+# parents[0] = pages
+# parents[1] = streamlit_app
+# parents[2] = Smart Logistic Dataset
+#
+# Therefore parents[2] is the PROJECT ROOT.
+# ============================================================
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+
+# ============================================================
+# CORRECT DATASET LOCATION
+# ============================================================
+
+DATA_PATH = (
+    BASE_DIR
+    / "data"
+    / "processed"
+    / "logistics_feature_engineered.csv"
+)
+
+
+# ============================================================
+# LOAD DATASET
+# ============================================================
+
+@st.cache_data
+def load_data():
+
+    if not DATA_PATH.exists():
+
+        st.error(
+            f"""
+            Dataset not found.
+
+            Expected location:
+
+            {DATA_PATH}
+
+            Please verify that
+            logistics_feature_engineered.csv
+            exists inside:
+
+            data/processed/
+            """
+        )
+
+        return None
+
+    try:
+
+        df = pd.read_csv(DATA_PATH)
+
+        return df
+
+    except Exception as e:
+
+        st.error(
+            f"Unable to load dataset.\n\nError: {e}"
+        )
+
+        return None
+
+
+# ============================================================
+# LOAD DATA
+# ============================================================
+
+inventory_df = load_data()
+
+
+# ============================================================
+# STOP IF DATASET IS NOT AVAILABLE
+# ============================================================
+
+if inventory_df is None:
+
+    st.stop()
+
+
+# ============================================================
+# PAGE TITLE
+# ============================================================
 
 st.title("📦 Inventory Analytics")
 
 st.markdown(
     """
-    Analyze inventory availability, demand pressure, stock rise, inventory coverage, and their relationship 
-    with logistics delays.
+    Analyze inventory availability, demand pressure, stock risk,
+    inventory coverage, and their relationship with logistics delays.
     """
 )
 
-# Load Data
 
-@st.cache_data
-def load_data():
+# ============================================================
+# DATASET INFORMATION
+# ============================================================
 
-    data_path = (
-        "C:/Users/Sanu/OneDrive/Desktop/"
-        "Smart Logistic Dataset/data/processed/"
-        "logistics_feature_engineered.csv"
-    )
+st.caption(
+    f"Dataset: {DATA_PATH}"
+)
 
-    return pd.read_csv(data_path)
+st.caption(
+    f"Records: {len(inventory_df):,} | "
+    f"Columns: {len(inventory_df.columns):,}"
+)
 
-try:
 
-    df = load_data()
-
-except FileNotFoundError:
-
-    st.error(
-        "Dataset not found. Please verify that "
-        "`logistics_feature_engineered.csv` exists in the "
-        "project data folder."
-    )
-
-    st.stop()
-
-# Data Validation
+# ============================================================
+# REQUIRED COLUMN CHECK
+# ============================================================
 
 required_columns = [
     "Inventory_Level",
     "Demand_Forecast",
     "Inventory_Coverage",
-    "Inventory_Demand_Gap",
     "Stock_Risk",
     "Logistics_Delay"
 ]
 
+
 missing_columns = [
-    col 
+    col
     for col in required_columns
-    if col not in df.columns
+    if col not in inventory_df.columns
 ]
+
 
 if missing_columns:
 
-    st.error(
-        f"The following required columns are missing: "
-        f"{missing_columns}"
+    st.warning(
+        "The following expected columns are missing: "
+        + ", ".join(missing_columns)
     )
 
-    st.stop()
 
-# Data Preparation
+# ============================================================
+# CREATE SAFE COPY
+# ============================================================
 
-inventory_df = df.copy()
+df = inventory_df.copy()
+
+
+# ============================================================
+# DATA TYPE CLEANING
+# ============================================================
 
 numeric_columns = [
     "Inventory_Level",
     "Demand_Forecast",
     "Inventory_Coverage",
-    "Inventory_Demand_Gap",
-    "Logistics_Delay"
+    "Logistics_Delay",
+    "Waiting_Time",
+    "Asset_Utilization",
+    "Fleet_Load_Index"
 ]
+
 
 for col in numeric_columns:
 
-    if col in inventory_df.columns:
+    if col in df.columns:
 
-        inventory_df[col]= pd.to_numeric(
-            inventory_df[col],
+        df[col] = pd.to_numeric(
+            df[col],
             errors="coerce"
         )
 
-inventory_df = inventory_df.dropna(
-    subset=[
-        "Inventory_Level",
-        "Demand_Forecast",
-        "Logistics_Delay"
-    ]
-)
-
-# KPI Calculations
-
-total_shipments = len(inventory_df)
-
-delayed_shipments = int(
-    inventory_df["Logistics_Delay"].sum()
-)
-
-delay_rate = (
-    delayed_shipments / total_shipments * 100
-    if total_shipments > 0
-    else 0
-)
-
-avg_inventory = inventory_df[
-    "Inventory_Level"
-].mean()
-
-avg_demand = inventory_df[
-    "Demand_Forecast"
-].mean()
-
-avg_coverage = inventory_df[
-    "Inventory_Coverage"
-].mean()
-
-high_risk_count = 0
 
 # ============================================================
-# STOCK RISK ANALYSIS
+# KPI SECTION
 # ============================================================
 
-if "Stock_Risk" in inventory_df.columns:
-
-    stock_risk = (
-        inventory_df["Stock_Risk"]
-        .fillna("Unknown")
-        .astype(str)
-        .str.strip()
-        .str.lower()
-    )
-
-    high_risk_count = stock_risk.isin(
-        ["high", "critical", "critical risk"]
-    ).sum()
-
-    risk_rate = (
-        high_risk_count / len(inventory_df) * 100
-        if len(inventory_df) > 0
-        else 0
-    )
-
-else:
-
-    high_risk_count = 0
-    risk_rate = 0
+st.subheader("📊 Inventory KPIs")
 
 
-col1, col2 = st.columns(2)
+col1, col2, col3, col4 = st.columns(4)
 
-with col1:
-    st.metric(
-        "High/Critical Stock Risk",
-        f"{high_risk_count:,}"
-    )
 
-with col2:
-    st.metric(
-        "High-Risk Rate",
-        f"{risk_rate:.1f}%"
-    )
-
-# KPI Cards
-
-st.subheader("Inventory Performance Overview")
-
-col1, col2, col3, col4, col5 = st.columns(5)
+# ------------------------------------------------------------
+# Average Inventory
+# ------------------------------------------------------------
 
 with col1:
 
-    st.metric(
-        "Average Inventory",
-        f"{avg_inventory:,.1f}"
-    )
+    if "Inventory_Level" in df.columns:
+
+        avg_inventory = df["Inventory_Level"].mean()
+
+        st.metric(
+            "Average Inventory",
+            f"{avg_inventory:,.1f}"
+        )
+
+    else:
+
+        st.metric(
+            "Average Inventory",
+            "N/A"
+        )
+
+
+# ------------------------------------------------------------
+# Average Demand
+# ------------------------------------------------------------
 
 with col2:
 
-    st.metric(
-        "Average Demand",
-        f"{avg_demand:,.1f}"
-    )
+    if "Demand_Forecast" in df.columns:
+
+        avg_demand = df["Demand_Forecast"].mean()
+
+        st.metric(
+            "Average Demand",
+            f"{avg_demand:,.1f}"
+        )
+
+    else:
+
+        st.metric(
+            "Average Demand",
+            "N/A"
+        )
+
+
+# ------------------------------------------------------------
+# Average Inventory Coverage
+# ------------------------------------------------------------
 
 with col3:
 
-    st.metric(
-        "Avg Inventory Coverage",
-        f"{avg_coverage:,.2f}"
-    )
+    if "Inventory_Coverage" in df.columns:
+
+        avg_coverage = df["Inventory_Coverage"].mean()
+
+        st.metric(
+            "Avg Inventory Coverage",
+            f"{avg_coverage:,.2f}"
+        )
+
+    else:
+
+        st.metric(
+            "Avg Inventory Coverage",
+            "N/A"
+        )
+
+
+# ------------------------------------------------------------
+# Delay Rate
+# ------------------------------------------------------------
 
 with col4:
 
-    st.metric(
-        "High-Risk Inventory",
-        f"{high_risk_count:,}"
-    )
+    if "Logistics_Delay" in df.columns:
 
-with col5:
+        delay_rate = (
+            df["Logistics_Delay"]
+            .mean()
+            * 100
+        )
 
-    st.metric(
-        "Overall Delay Rate",
-        f"{delay_rate:.1f}%"
-    )
+        st.metric(
+            "Delay Rate",
+            f"{delay_rate:.2f}%"
+        )
+
+    else:
+
+        st.metric(
+            "Delay Rate",
+            "N/A"
+        )
+
+
+# ============================================================
+# INVENTORY RISK ANALYSIS
+# ============================================================
 
 st.divider()
 
-# Inventory vs Demand
+st.subheader("🚨 Inventory Risk Analysis")
 
-st.subheader("Inventory vs Demand")
 
-col1, col2 = st.columns(2)
+if "Stock_Risk" in df.columns:
 
-with col1:
+    risk_df = (
+        df["Stock_Risk"]
+        .astype(str)
+        .str.strip()
+        .str.title()
+        .value_counts()
+        .reset_index()
+    )
 
-    sample_df = inventory_df[
+    risk_df.columns = [
+        "Stock_Risk",
+        "Count"
+    ]
+
+    col1, col2 = st.columns(2)
+
+
+    # --------------------------------------------------------
+    # Risk Distribution
+    # --------------------------------------------------------
+
+    with col1:
+
+        fig = px.bar(
+            risk_df,
+            x="Stock_Risk",
+            y="Count",
+            title="Stock Risk Distribution",
+            text_auto=True
+        )
+
+        fig.update_layout(
+            xaxis_title="Stock Risk",
+            yaxis_title="Number of Records"
+        )
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
+
+
+    # --------------------------------------------------------
+    # High Risk Count
+    # --------------------------------------------------------
+
+    with col2:
+
+        high_risk_labels = [
+            "High",
+            "Critical",
+            "Critical Risk"
+        ]
+
+        high_risk_count = (
+            df["Stock_Risk"]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            .isin(
+                [
+                    x.lower()
+                    for x in high_risk_labels
+                ]
+            )
+            .sum()
+        )
+
+        total_records = len(df)
+
+        high_risk_percentage = (
+            high_risk_count /
+            total_records *
+            100
+            if total_records > 0
+            else 0
+        )
+
+        st.metric(
+            "High / Critical Risk Records",
+            f"{high_risk_count:,}"
+        )
+
+        st.metric(
+            "High / Critical Risk %",
+            f"{high_risk_percentage:.2f}%"
+        )
+
+else:
+
+    st.info(
+        "Stock_Risk column is not available."
+    )
+
+
+# ============================================================
+# INVENTORY VS DEMAND
+# ============================================================
+
+st.divider()
+
+st.subheader("📈 Inventory vs Demand")
+
+
+if (
+    "Inventory_Level" in df.columns
+    and
+    "Demand_Forecast" in df.columns
+):
+
+    sample_df = df[
         [
             "Inventory_Level",
-            "Demand_Forecast",
-            "Logistics_Delay"
+            "Demand_Forecast"
         ]
     ].dropna()
 
@@ -245,27 +441,18 @@ with col1:
             random_state=42
         )
 
-    sample_df["Delay_Status"] = (
-        sample_df["Logistics_Delay"]
-        .map({
-            0: "No Delay",
-            1: "Delay"
-        })
-        .fillna("Unknown")
-    )
 
     fig = px.scatter(
         sample_df,
-        x="Inventory_Level",
-        y="Demand_Forecast",
-        color="Delay_Status",
-        title="Inventory Level vs Demand Forecast",
-        opacity=0.65,
-        labels={
-            "Inventory_Level": "Inventory Level",
-            "Demand_Forecast": "Demand Forecast"
-        }
-         
+        x="Demand_Forecast",
+        y="Inventory_Level",
+        title="Inventory Level vs Forecasted Demand",
+        opacity=0.5
+    )
+
+    fig.update_layout(
+        xaxis_title="Demand Forecast",
+        yaxis_title="Inventory Level"
     )
 
     st.plotly_chart(
@@ -273,42 +460,38 @@ with col1:
         use_container_width=True
     )
 
-with col2:
+else:
 
-    gap_df = inventory_df[
-        [
-            "Inventory_Demand_Gap",
-            "Logistics_Delay"
-        ]
+    st.info(
+        "Inventory_Level or Demand_Forecast is unavailable."
+    )
+
+
+# ============================================================
+# INVENTORY COVERAGE
+# ============================================================
+
+st.divider()
+
+st.subheader("📦 Inventory Coverage")
+
+
+if "Inventory_Coverage" in df.columns:
+
+    coverage_df = df[
+        ["Inventory_Coverage"]
     ].dropna()
 
-    gap_df["Delay_Status"] = (
-        gap_df["Logistics_Delay"]
-        .map({
-            0: "No Delay",
-            1: "Delay"
-        })
-        .fillna("Unknown")
+    fig = px.histogram(
+        coverage_df,
+        x="Inventory_Coverage",
+        nbins=40,
+        title="Inventory Coverage Distribution"
     )
 
-    if len(gap_df) > 5000:
-
-        gap_df = gap_df.sample(
-            5000,
-            random_state=42
-        )
-
-    fig = px.scatter(
-        gap_df,
-        x="Inventory_Demand_Gap",
-        y="Delay_Status",
-        color="Delay_Status",
-        title="Inventory Demand Gap vs Logistics Delay",
-        opacity = 0.65,
-        labels={
-            "Inventory_Demand_Gap": "Inventory Demand Gap",
-            "Logistics_Delay": "Logistics Delay"
-        }
+    fig.update_layout(
+        xaxis_title="Inventory Coverage",
+        yaxis_title="Number of Records"
     )
 
     st.plotly_chart(
@@ -316,195 +499,138 @@ with col2:
         use_container_width=True
     )
 
-# Inventory Demand Gap Analysis
+else:
 
-st.subheader("Inventory Demand Gap Analysis")
+    st.info(
+        "Inventory_Coverage column is unavailable."
+    )
 
-gap_analysis = (
-    inventory_df
-    .groupby("Logistics_Delay")
-    .agg(
-        Average_Inventory_Demand_Gap=(
-            "Inventory_Demand_Gap",
-            "mean"
-        ),
-        Average_Inventory=(
-            "Inventory_Level",
-            "mean"
-        ),
-        Average_Demand=(
-            "Demand_Forecast",
-            "mean"
-        ),
-        Shipment_Count=(
+
+# ============================================================
+# INVENTORY COVERAGE VS DELAYS
+# ============================================================
+
+st.divider()
+
+st.subheader("🚚 Inventory Coverage vs Logistics Delays")
+
+
+if (
+    "Inventory_Coverage" in df.columns
+    and
+    "Logistics_Delay" in df.columns
+):
+
+    coverage_delay = (
+        df.groupby(
             "Logistics_Delay",
-            "count"
-        )
+            observed=True
+        )["Inventory_Coverage"]
+        .mean()
+        .reset_index()
     )
-    .reset_index()
-)
 
-gap_analysis["Delay_Status"] = (
-    gap_analysis["Logistics_Delay"]
-    .map({
-        0: "No Delay",
-        1: "Delay"
-    })
-)
-
-gap_analysis = gap_analysis[
-    [
-        "Delay_Status",
-        "Average_Inventory_Demand_Gap",
-        "Average_Inventory",
-        "Average_Demand",
-        "Shipment_Count"
-    ]
-]
-
-st.dataframe(
-    gap_analysis.round(2),
-    use_container_width=True,
-    hide_index=True
-)
-
-# Inventory Coverage Analysis
-
-st.subheader("Inventory Coverage and Delay Risk")
-
-coverage_df = inventory_df[
-    [
-        "Inventory_Coverage",
+    coverage_delay[
+        "Delay_Status"
+    ] = coverage_delay[
         "Logistics_Delay"
+    ].map(
+        {
+            0: "No Delay",
+            1: "Delay"
+        }
+    )
 
-    ]
-].dropna()
+    coverage_delay[
+        "Delay_Status"
+    ] = coverage_delay[
+        "Delay_Status"
+    ].fillna(
+        coverage_delay[
+            "Logistics_Delay"
+        ].astype(str)
+    )
 
-coverage_df["Delay_Status"] = (
-    coverage_df["Logistics_Delay"]
-    .map({
-        0:"No Delay",
-        1: "Delay"
-    })
-)
 
-fig = px.box(
-    coverage_df,
-    x="Delay_Status",
-    y="Inventory_Coverage",
-    color="Delay_Status",
-    points="outliers",
-    title="Inventory Coverage by Delay Status",
-    labels={
-        "Delay_Status": "Delivery Status",
-        "Inventory_Coverage": "Inventory Coverage"
-    }
-)
+    fig = px.bar(
+        coverage_delay,
+        x="Delay_Status",
+        y="Inventory_Coverage",
+        text_auto=".2f",
+        title="Average Inventory Coverage by Delay Status"
+    )
 
-st.plotly_chart(
-    fig,
-    use_container_width=True
-)
+    fig.update_layout(
+        xaxis_title="Delivery Status",
+        yaxis_title="Average Inventory Coverage"
+    )
 
-# Stock Risk Analysis
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
 
-if "Stock_Risk" in inventory_df.columns:
+else:
 
-    st.subheader("Stock Risk Distribution")
+    st.info(
+        "Required inventory/delay columns are unavailable."
+    )
 
-    stock_risk_df= (
-        inventory_df["Stock_Risk"]
+
+# ============================================================
+# STOCK RISK VS DELAY RATE
+# ============================================================
+
+st.divider()
+
+st.subheader("⚠️ Stock Risk vs Delay Rate")
+
+
+if (
+    "Stock_Risk" in df.columns
+    and
+    "Logistics_Delay" in df.columns
+):
+
+    risk_delay = (
+        df.groupby(
+            "Stock_Risk",
+            observed=True
+        )["Logistics_Delay"]
+        .mean()
+        .reset_index()
+    )
+
+    risk_delay[
+        "Delay_Rate"
+    ] = (
+        risk_delay[
+            "Logistics_Delay"
+        ] * 100
+    )
+
+
+    risk_delay[
+        "Stock_Risk"
+    ] = (
+        risk_delay[
+            "Stock_Risk"
+        ]
         .astype(str)
-        .value_counts()
-        .reset_index()
     )
 
-    stock_risk_df.columns = [
-        "Stock_Risk",
-        "Shipment_Count"
-    ]
-
-    stock_risk_df["Percentage"] = (
-        stock_risk_df["Shipment_Count"]
-        / stock_risk_df["Shipment_Count"].sum()
-        * 100
-    ).round(2)
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        st.dataframe(
-            stock_risk_df,
-            use_container_width=True,
-            hide_index=True
-        )
-
-    with col2:
-
-        fig = px.pie(
-            stock_risk_df,
-            names="Stock_Risk",
-            values="Shipment_Count",
-            title="Stock Risk Distribution"
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
-
-# Stock Risk vs Delay 
-
-if "Stock_Risk" in inventory_df.columns:
-
-    st.subheader("Stock Risk vs Logistics Delay")
-
-    risk_delay= (
-        inventory_df
-        .groupby("Stock_Risk")
-        .agg(
-            Total_Shipments=(
-                "Logistics_Delay",
-                "count"
-            ),
-            Delayed_Shipments=(
-                "Logistics_Delay",
-                "sum"
-            )
-        )
-        .reset_index()
-    )
-
-    risk_delay["Delay_Rate"]= (
-        risk_delay["Delayed_Shipments"]
-        / risk_delay["Total_Shipments"]
-        * 100
-    ).round(2)
-
-
-    st.dataframe(
-        risk_delay,
-        use_container_width=True,
-        hide_index=True
-    )
 
     fig = px.bar(
         risk_delay,
         x="Stock_Risk",
         y="Delay_Rate",
-        text="Delay_Rate",
+        text_auto=".2f",
         title="Logistics Delay Rate by Stock Risk"
     )
 
-    fig.update_traces(
-        texttemplate="%{text:.1f}%",
-        textposition="outside"
-    )
-
     fig.update_layout(
-        yaxis_title="Delay Rate (%)",
-        xaxis_title="Stock Risk"
+        xaxis_title="Stock Risk",
+        yaxis_title="Delay Rate (%)"
     )
 
     st.plotly_chart(
@@ -512,142 +638,195 @@ if "Stock_Risk" in inventory_df.columns:
         use_container_width=True
     )
 
-# Inventory Band Analysis
+else:
 
-if "Inventory_Band" in inventory_df.columns:
-
-    st.subheader("Inventory Band Performance")
-
-    band_df = inventory_df[
-        [
-            "Inventory_Band",
-            "Logistics_Delay"
-        ]
-    ].dropna().copy()
-
-    # Prevent Plotly Interval serialization errors
-    band_df["Inventory_Band"] = (
-        band_df["Inventory_Band"]
-        .astype(str)
-    )
-
-    band_summary = (
-        band_df
-        .groupby("Inventory_Band")
-        .agg(
-            Total_Shipments=(
-                "Logistics_Delay",
-                "count"
-            ),
-            Delayed_Shipments=(
-                "Logistics_Delay",
-                "count"
-            )
-        )
-        .reset_index()
-    )
-
-    band_summary["Delay_Rate"] = (
-        band_summary["Delayed_Shipments"]
-        / band_summary["Total_Shipments"]
-        * 100
-    ).round(2)
-
-    st.dataframe(
-        band_summary,
-        use_container_width=True,
-        hide_index=True
-    )
-
-    fig = px.bar(
-        band_summary,
-        x="Inventory_Band",
-        y="Delay_Rate",
-        text="Delay_Rate",
-        title="Delay Rate by Inventory Band"
-    )
-
-    fig.update_traces(
-        texttemplate="%{text:.1f}%",
-        textposition= "outside"
-    )
-    fig.update_layout(
-        yaxis_title="Delay Rate (%)",
-        xaxis_title="Inventory Band"
-    )
-
-    st.plotly_chart(
-        fig,
-        use_container_width=True
-    )
-
-# Inventory Insights
-
-st.subheader("💡 Inventory Management Insights")
-
-st.markdown(
-    """
-    **Management should focus on four inventory signals.**
-
-    - **Inventory-demand gap:** A negative or insufficient inventory-demand gap can indicate increasing
-    stock pressure and potential operation distruption.
-
-    - **Inventory covergae:** Low coverage indicates that available inventory may not be sufficient to
-    support expected demand.
-
-    - **Stock risk:** High-risk inventory segments should receive proactive replenishment and
-    operational attention. 
-
-    -- **Delay relationship:** Inventory conditions should be monitored alongside logistics delay 
-    rather than independently.
-    """
-)
-
-# Business Recommendations
-
-st.subheader("🎯  Business Recommendations")
-
-recommendations = [
-    (
-        "1. Monitor inventory-demand gaps",
-        "Prioritize shipments where forecast demand is approaching "
-        "or exceeding available inventory."
-    ),
-    (
-        "2. Protect low-coverage inventory",
-        "Use inventory ccoverage as an early-warning indicator for "
-        "potential fulfillment and logistics disruption."
-    ),
-    (
-        "3. Prioritize high stock-risk segments",
-        "Review high-risk inventory segments before dispatch planning "
-        "and replenish critical stock where appropriate."
-    ),
-    (
-        "4. Combine inventory and logistics intelligence",
-        "Inventory risk should be evaluated together with traffic, "
-        "fleet utilization, operational stress and delay probability."
-    ),
-    (
-        "5. Use predictive delay alerts",
-        "The Random Forest delay model can be used alongside inventory "
-        "analytics to prioritize shipments requiring operational attention."
-    )
-]
-
-
-for title, recommendation in recommendations:
-
-    st.markdown(
-        f"**{title}** - {recommendation}"
+    st.info(
+        "Stock_Risk or Logistics_Delay is unavailable."
     )
 
 
-# Footer 
+# ============================================================
+# INVENTORY DEMAND GAP
+# ============================================================
 
 st.divider()
 
-st.caption(
-    "Smart Logistics Delay Prediction & Decision Support System | "
-    "Inventory Analytics"
-)
+st.subheader("📉 Inventory-Demand Gap")
+
+
+if (
+    "Inventory_Level" in df.columns
+    and
+    "Demand_Forecast" in df.columns
+):
+
+    if "Inventory_Demand_Gap" not in df.columns:
+
+        df["Inventory_Demand_Gap"] = (
+            df["Inventory_Level"]
+            -
+            df["Demand_Forecast"]
+        )
+
+
+    gap_df = df[
+        ["Inventory_Demand_Gap"]
+    ].dropna()
+
+
+    fig = px.histogram(
+        gap_df,
+        x="Inventory_Demand_Gap",
+        nbins=50,
+        title="Inventory-Demand Gap Distribution"
+    )
+
+    fig.update_layout(
+        xaxis_title="Inventory − Demand",
+        yaxis_title="Number of Records"
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+
+# ============================================================
+# INVENTORY INSIGHTS
+# ============================================================
+
+st.divider()
+
+st.subheader("💡 Business Insights")
+
+
+insights = []
+
+
+# ------------------------------------------------------------
+# Inventory / Demand pressure
+# ------------------------------------------------------------
+
+if (
+    "Inventory_Level" in df.columns
+    and
+    "Demand_Forecast" in df.columns
+):
+
+    avg_inventory = df[
+        "Inventory_Level"
+    ].mean()
+
+    avg_demand = df[
+        "Demand_Forecast"
+    ].mean()
+
+    if avg_demand > avg_inventory:
+
+        insights.append(
+            "🔴 Forecasted demand exceeds average inventory, "
+            "indicating potential inventory pressure."
+        )
+
+    else:
+
+        insights.append(
+            "🟢 Average inventory is currently above "
+            "forecasted demand."
+        )
+
+
+# ------------------------------------------------------------
+# Stock risk
+# ------------------------------------------------------------
+
+if "Stock_Risk" in df.columns:
+
+    high_risk_count = (
+        df["Stock_Risk"]
+        .astype(str)
+        .str.lower()
+        .isin(
+            [
+                "high",
+                "critical",
+                "critical risk"
+            ]
+        )
+        .sum()
+    )
+
+    high_risk_pct = (
+        high_risk_count /
+        len(df) *
+        100
+        if len(df) > 0
+        else 0
+    )
+
+    insights.append(
+        f"⚠️ {high_risk_pct:.2f}% of records "
+        f"are classified as High/Critical stock risk."
+    )
+
+
+# ------------------------------------------------------------
+# Delay relationship
+# ------------------------------------------------------------
+
+if (
+    "Stock_Risk" in df.columns
+    and
+    "Logistics_Delay" in df.columns
+):
+
+    risk_delay = (
+        df.groupby(
+            "Stock_Risk",
+            observed=True
+        )["Logistics_Delay"]
+        .mean()
+    )
+
+    if len(risk_delay) > 1:
+
+        highest_risk = (
+            risk_delay
+            .idxmax()
+        )
+
+        highest_delay = (
+            risk_delay
+            .max()
+            * 100
+        )
+
+        insights.append(
+            f"🚚 The {highest_risk} stock-risk category "
+            f"has the highest observed delay rate "
+            f"({highest_delay:.2f}%)."
+        )
+
+
+# ------------------------------------------------------------
+# Display insights
+# ------------------------------------------------------------
+
+for insight in insights:
+
+    st.markdown(
+        f"- {insight}"
+    )
+
+
+# ============================================================
+# DATA PREVIEW
+# ============================================================
+
+with st.expander("🔍 View Inventory Dataset"):
+
+    st.dataframe(
+        df.head(100),
+        use_container_width=True
+    )
